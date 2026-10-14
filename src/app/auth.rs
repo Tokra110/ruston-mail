@@ -79,7 +79,10 @@ impl App {
     }
 
     pub(crate) fn login_edited(&mut self) {
-        self.auth_error = None;
+        // Typing cannot make a demo process able to sign in, so its notice stays.
+        if !self.demo_process {
+            self.auth_error = None;
+        }
     }
 
     pub fn error_message(&self) -> Option<String> {

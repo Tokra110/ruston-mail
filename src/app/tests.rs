@@ -1907,6 +1907,31 @@ fn a_demo_process_never_starts_a_proton_sign_in() {
 }
 
 #[test]
+fn a_demo_process_keeps_its_notice_while_the_form_is_edited() {
+    let (mut app, _) = App::boot(true, Settings::default());
+    deliver_demo_page(&mut app, 1, 0);
+    let _ = app.update(Message::Logout);
+
+    app.login_form.username = "username sentinel".into();
+    app.login_edited();
+
+    assert_eq!(app.auth_error, Some(AuthError::DemoSignInUnavailable));
+}
+
+#[test]
+fn a_normal_process_clears_its_error_when_the_form_is_edited() {
+    let (mut app, _) = App::boot(false, Settings::default());
+    let _ = app.update(Message::SessionChecked(ResumeOutcome::SignedOut));
+    let _ = app.update(Message::Submit);
+    assert_eq!(app.auth_error, Some(AuthError::UsernameRequired));
+
+    app.login_form.username = "username sentinel".into();
+    app.login_edited();
+
+    assert_eq!(app.auth_error, None);
+}
+
+#[test]
 fn a_normal_process_still_starts_a_proton_sign_in() {
     let (mut app, _) = App::boot(false, Settings::default());
     let _ = app.update(Message::SessionChecked(ResumeOutcome::SignedOut));
