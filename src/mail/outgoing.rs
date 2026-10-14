@@ -37,7 +37,7 @@ pub enum Protection {
     EndToEnd,
     /// Another provider's address with a published PGP key.
     Pgp,
-    /// No key to encrypt to: delivered unencrypted.
+    /// No key to encrypt to: delivered without end-to-end encryption.
     Unencrypted,
 }
 

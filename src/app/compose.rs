@@ -55,25 +55,45 @@ pub enum ProtectionNotice {
     Checking,
     /// Every recipient has a key the message will be encrypted to.
     Encrypted,
-    /// These recipients will receive the message unencrypted.
-    Unencrypted(Vec<String>),
-    /// These recipients could not be checked.
-    Unknown(Vec<String>),
+    /// Some recipients will not get an end-to-end encrypted copy, or could
+    /// not be checked. Both are named, so an unchecked address never reads
+    /// as encrypted.
+    Warning {
+        unencrypted: Vec<String>,
+        unknown: Vec<String>,
+    },
 }
 
 impl ProtectionNotice {
+    pub fn is_warning(&self) -> bool {
+        matches!(self, Self::Warning { .. })
+    }
+
     pub fn message(&self) -> String {
         match self {
             Self::Checking => "Checking how this message will be protected…".to_owned(),
-            Self::Encrypted => "Proton will encrypt this message for every recipient.".to_owned(),
-            Self::Unencrypted(addresses) => format!(
-                "Proton will deliver this message unencrypted to: {}",
-                addresses.join(", ")
-            ),
-            Self::Unknown(addresses) => format!(
-                "Could not check how this message will be protected for: {}",
-                addresses.join(", ")
-            ),
+            Self::Encrypted => {
+                "Proton will end-to-end encrypt this message for every recipient.".to_owned()
+            }
+            Self::Warning {
+                unencrypted,
+                unknown,
+            } => {
+                let mut lines = Vec::new();
+                if !unencrypted.is_empty() {
+                    lines.push(format!(
+                        "Proton will not end-to-end encrypt this message for: {}",
+                        unencrypted.join(", ")
+                    ));
+                }
+                if !unknown.is_empty() {
+                    lines.push(format!(
+                        "Could not check how this message will be protected for: {}",
+                        unknown.join(", ")
+                    ));
+                }
+                lines.join("\n")
+            }
         }
     }
 }
@@ -216,10 +236,11 @@ impl Compose {
         let unknown = with(|state| state == Checked::Unknown);
         if checked.is_empty() {
             None
-        } else if !unencrypted.is_empty() {
-            Some(ProtectionNotice::Unencrypted(unencrypted))
-        } else if !unknown.is_empty() {
-            Some(ProtectionNotice::Unknown(unknown))
+        } else if !unencrypted.is_empty() || !unknown.is_empty() {
+            Some(ProtectionNotice::Warning {
+                unencrypted,
+                unknown,
+            })
         } else if checked.iter().any(|(_, state)| *state == Checked::Checking) {
             Some(ProtectionNotice::Checking)
         } else {
@@ -642,9 +663,10 @@ mod tests {
 
         assert_eq!(
             notice(&app),
-            Some(ProtectionNotice::Unencrypted(vec![
-                "plain@example.com".into()
-            ]))
+            Some(ProtectionNotice::Warning {
+                unencrypted: vec!["plain@example.com".into()],
+                unknown: Vec::new(),
+            })
         );
     }
 
@@ -659,8 +681,36 @@ mod tests {
 
         assert_eq!(
             notice(&app),
-            Some(ProtectionNotice::Unknown(vec!["ada@proton.me".into()]))
+            Some(ProtectionNotice::Warning {
+                unencrypted: Vec::new(),
+                unknown: vec!["ada@proton.me".into()],
+            })
         );
+    }
+
+    #[test]
+    fn an_unchecked_recipient_is_named_beside_an_unencrypted_one() {
+        let mut app = composing("plain@example.com, ada@proton.me");
+        let _ = app.update(Message::ComposeRecipientsLeft);
+        checked(
+            &mut app,
+            vec![
+                ("plain@example.com".into(), Ok(Protection::Unencrypted)),
+                ("ada@proton.me".into(), Err(MailboxError::Connection)),
+            ],
+        );
+
+        let notice = notice(&app).unwrap();
+        assert_eq!(
+            notice,
+            ProtectionNotice::Warning {
+                unencrypted: vec!["plain@example.com".into()],
+                unknown: vec!["ada@proton.me".into()],
+            }
+        );
+        let message = notice.message();
+        assert!(message.contains("plain@example.com"), "{message}");
+        assert!(message.contains("ada@proton.me"), "{message}");
     }
 
     #[test]

@@ -171,7 +171,7 @@ pub enum RecipientProtection {
     EndToEnd,
     /// Another provider's address with a published PGP key: encrypted to it.
     Pgp,
-    /// No usable key: Proton delivers the message unencrypted.
+    /// No usable key: Proton delivers the message without end-to-end encryption.
     Unencrypted,
 }
 

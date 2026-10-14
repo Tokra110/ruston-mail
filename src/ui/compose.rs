@@ -172,7 +172,17 @@ fn page(ui: &mut egui::Ui, compose: &Compose, messages: &mut Vec<Message>) {
             messages.push(Message::ComposeRecipientsLeft);
         }
         if let Some(notice) = compose.protection_notice() {
-            detail(ui, &notice.message());
+            if notice.is_warning() {
+                // A copy that may leave without end-to-end encryption must
+                // stand out from the field labels.
+                ui.label(
+                    egui::RichText::new(notice.message())
+                        .small()
+                        .color(theme::colors(ui).danger),
+                );
+            } else {
+                detail(ui, &notice.message());
+            }
         }
         let more = if compose.showing_more() {
             "Fewer options"
@@ -384,12 +394,16 @@ mod tests {
         ));
         let shown = |app: &crate::app::App| {
             let mut messages = Vec::new();
+            let mut danger = egui::Color32::PLACEHOLDER;
             let output = context.run_ui(egui::RawInput::default(), |ui| {
+                danger = theme::colors(ui).danger;
                 show(ui, app.compose().unwrap(), &mut messages);
             });
+            // The warning is named and drawn in the danger color, not as a field label.
             let found = output.shapes.iter().any(|clipped| {
                 matches!(&clipped.shape, egui::epaint::Shape::Text(text)
-                    if text.galley.text().contains("unencrypted to: plain@example.com"))
+                    if text.galley.text().contains("not end-to-end encrypt this message for: plain@example.com")
+                        && text.galley.job.sections.iter().all(|section| section.format.color == danger))
             });
             output.drop_without_applying_deltas();
             found
